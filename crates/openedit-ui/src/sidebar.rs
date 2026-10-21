@@ -1,7 +1,7 @@
 use crate::git::{git_status_indicator, FileGitStatus, GitManager};
 use crate::theme::EditorTheme;
 use egui;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Directories and file prefixes to hide in the file tree.
 const HIDDEN_DIRS: &[&str] = &[
@@ -134,6 +134,7 @@ pub fn render_sidebar(
     theme: &EditorTheme,
     _font_size: f32,
     git_manager: Option<&GitManager>,
+    active_path: Option<&Path>,
 ) -> Option<PathBuf> {
     // Fill background
     let rect = ui.available_rect_before_wrap();
@@ -161,7 +162,9 @@ pub fn render_sidebar(
                 // Render children of root directly (don't show root directory node itself)
                 let children = &mut root.children;
                 for child in children.iter_mut() {
-                    if let Some(path) = render_tree_node(ui, child, 0, theme, git_manager) {
+                    if let Some(path) =
+                        render_tree_node(ui, child, 0, theme, git_manager, active_path)
+                    {
                         clicked_file = Some(path);
                     }
                 }
@@ -188,78 +191,100 @@ fn render_tree_node(
     depth: usize,
     theme: &EditorTheme,
     git_manager: Option<&GitManager>,
+    active_path: Option<&Path>,
 ) -> Option<PathBuf> {
     let indent = depth as f32 * 16.0 + 4.0;
-    let mut clicked_file = None;
+    let is_active_file = !node.is_dir
+        && active_path.is_some_and(|active| node.path.as_path() == active);
 
-    let response = ui.horizontal(|ui| {
-        ui.add_space(indent);
+    // Allocate a full-width row so the active-file background spans the Explorer.
+    let row_width = ui.available_width();
+    let row_height = ui.spacing().interact_size.y;
+    let row_rect = egui::Rect::from_min_size(
+        ui.cursor().min,
+        egui::vec2(row_width, row_height),
+    );
 
-        if node.is_dir {
-            let arrow = if node.expanded {
-                "\u{25BC}"
-            } else {
-                "\u{25B6}"
-            };
-            let arrow_response = ui.add(
-                egui::Label::new(egui::RichText::new(arrow).size(10.0).color(theme.gutter_fg))
-                    .sense(egui::Sense::click()),
-            );
-
-            let folder_icon = if node.expanded { "[-]" } else { "[+]" };
-            let label_response = ui.add(
-                egui::Label::new(
-                    egui::RichText::new(format!("{} {}", folder_icon, &node.name))
-                        .color(theme.foreground),
-                )
-                .sense(egui::Sense::click()),
-            );
-
-            if arrow_response.clicked() || label_response.clicked() {
-                node.expanded = !node.expanded;
-                if node.expanded && !node.children_loaded {
-                    node.children = load_directory_children(&node.path);
-                    node.children_loaded = true;
-                }
-            }
-        } else {
-            // Alignment space matching arrow width
-            ui.add_space(14.0);
-
-            let file_icon = file_icon_for_name(&node.name);
-            let label_response = ui.add(
-                egui::Label::new(
-                    egui::RichText::new(format!("{} {}", file_icon, &node.name))
-                        .color(theme.foreground),
-                )
-                .sense(egui::Sense::click()),
-            );
-
-            if label_response.clicked() {
-                return Some(node.path.clone());
-            }
-
-            // Git status indicator for files
-            if let Some(gm) = git_manager {
-                let status = gm.get_file_status(&node.path);
-                if status != FileGitStatus::Unchanged {
-                    let (label, color) = git_status_indicator(status);
-                    ui.label(egui::RichText::new(label).small().color(color));
-                }
-            }
-        }
-
-        None
-    });
-
-    if let Some(path) = response.inner {
-        clicked_file = Some(path);
+    if is_active_file {
+        ui.painter().rect_filled(row_rect, 2.0, theme.selection_bg);
     }
+
+    let response = ui.allocate_ui_with_layout(
+        egui::vec2(row_width, row_height),
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| {
+            ui.add_space(indent);
+
+            if node.is_dir {
+                let arrow = if node.expanded {
+                    "\u{25BC}"
+                } else {
+                    "\u{25B6}"
+                };
+                let arrow_response = ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(arrow)
+                            .size(10.0)
+                            .color(theme.gutter_fg),
+                    )
+                    .sense(egui::Sense::click()),
+                );
+
+                let folder_icon = if node.expanded { "[-]" } else { "[+]" };
+                let label_response = ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(format!("{} {}", folder_icon, &node.name))
+                            .color(theme.foreground),
+                    )
+                    .sense(egui::Sense::click()),
+                );
+
+                if arrow_response.clicked() || label_response.clicked() {
+                    node.expanded = !node.expanded;
+                    if node.expanded && !node.children_loaded {
+                        node.children = load_directory_children(&node.path);
+                        node.children_loaded = true;
+                    }
+                }
+            } else {
+                // Alignment space matching arrow width
+                ui.add_space(14.0);
+
+                let file_icon = file_icon_for_name(&node.name);
+                let label_response = ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(format!("{} {}", file_icon, &node.name))
+                            .color(theme.foreground),
+                    )
+                    .sense(egui::Sense::click()),
+                );
+
+                if label_response.clicked() {
+                    return Some(node.path.clone());
+                }
+
+                // Git status indicator for files
+                if let Some(gm) = git_manager {
+                    let status = gm.get_file_status(&node.path);
+                    if status != FileGitStatus::Unchanged {
+                        let (label, color) = git_status_indicator(status);
+                        ui.label(egui::RichText::new(label).small().color(color));
+                    }
+                }
+            }
+
+            None
+        },
+    );
+
+    let mut clicked_file = response.inner;
 
     // Render expanded children
     if node.is_dir && node.expanded {
         for child in &mut node.children {
-            if let Some(path) = render_tree_node(ui, child, depth + 1, theme, git_manager) {
+            if let Some(path) =
+                render_tree_node(ui, child, depth + 1, theme, git_manager, active_path)
+            {
                 clicked_file = Some(path);
             }
         }

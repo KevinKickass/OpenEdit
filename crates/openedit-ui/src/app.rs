@@ -3205,22 +3205,32 @@ impl eframe::App for OpenEditApp {
 
                 // --- Sidebar ---
                 let mut sidebar_file_clicked: Option<PathBuf> = None;
+
                 if sidebar_visible {
                     let sidebar_rect = egui::Rect::from_min_size(
                         full_available.left_top(),
                         egui::Vec2::new(sidebar_width, full_available.height()),
                     );
+
                     let mut sidebar_ui = ui.new_child(
                         egui::UiBuilder::new()
                             .max_rect(sidebar_rect)
                             .layout(egui::Layout::top_down(egui::Align::LEFT)),
                     );
+
+                    // Get the path of the currently active editor document.
+                    let active_path = self
+                        .documents
+                        .get(self.active_tab)
+                        .and_then(|doc| doc.path.as_deref());
+
                     sidebar_file_clicked = sidebar::render_sidebar(
                         &mut sidebar_ui,
                         &mut self.sidebar_state,
                         &self.theme,
                         self.font_size,
                         Some(&self.git_state),
+                        active_path,
                     );
                 }
 
