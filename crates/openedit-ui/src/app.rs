@@ -3167,12 +3167,16 @@ impl eframe::App for OpenEditApp {
                             self.pending_clipboard = Some(path);
                         }
                         TabContextAction::RevealInFileManager(path) => {
-                            let path_buf = std::path::Path::new(&path);
-                            let dir = path_buf.parent().unwrap_or(path_buf);
                             #[cfg(target_os = "linux")]
                             {
-                                let _ = std::process::Command::new("xdg-open").arg(dir).spawn();
+                                let path_buf = std::path::Path::new(&path);
+                                let dir = path_buf.parent().unwrap_or(path_buf);
+
+                                let _ = std::process::Command::new("xdg-open")
+                                    .arg(dir)
+                                    .spawn();
                             }
+
                             #[cfg(target_os = "macos")]
                             {
                                 let _ = std::process::Command::new("open")
@@ -3180,6 +3184,7 @@ impl eframe::App for OpenEditApp {
                                     .arg(&path)
                                     .spawn();
                             }
+
                             #[cfg(target_os = "windows")]
                             {
                                 let _ = std::process::Command::new("explorer")
@@ -3205,22 +3210,32 @@ impl eframe::App for OpenEditApp {
 
                 // --- Sidebar ---
                 let mut sidebar_file_clicked: Option<PathBuf> = None;
+
                 if sidebar_visible {
                     let sidebar_rect = egui::Rect::from_min_size(
                         full_available.left_top(),
                         egui::Vec2::new(sidebar_width, full_available.height()),
                     );
+
                     let mut sidebar_ui = ui.new_child(
                         egui::UiBuilder::new()
                             .max_rect(sidebar_rect)
                             .layout(egui::Layout::top_down(egui::Align::LEFT)),
                     );
+
+                    // Get the path of the currently active editor document.
+                    let active_path = self
+                        .documents
+                        .get(self.active_tab)
+                        .and_then(|doc| doc.path.as_deref());
+
                     sidebar_file_clicked = sidebar::render_sidebar(
                         &mut sidebar_ui,
                         &mut self.sidebar_state,
                         &self.theme,
                         self.font_size,
                         Some(&self.git_state),
+                        active_path,
                     );
                 }
 
