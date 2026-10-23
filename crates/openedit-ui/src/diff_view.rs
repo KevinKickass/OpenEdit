@@ -516,7 +516,7 @@ pub fn render_diff_view(
             Pos2::new(separator_x, header_rect.top()),
             Pos2::new(separator_x, header_rect.bottom()),
         ],
-        egui::Stroke::new(1.0, theme.gutter_fg),
+        egui::Stroke::new(1.0_f32, theme.gutter_fg),
     );
 
     // Content area below header
@@ -585,7 +585,7 @@ pub fn render_diff_view(
             Pos2::new(separator_x, content_rect.top()),
             Pos2::new(separator_x, content_rect.bottom()),
         ],
-        egui::Stroke::new(1.0, theme.gutter_fg),
+        egui::Stroke::new(1.0_f32, theme.gutter_fg),
     );
 
     // Track which hunks we've already drawn merge buttons for, to draw

@@ -119,7 +119,7 @@ pub fn render_autocomplete(
     ui.painter().rect_stroke(
         popup_rect,
         4.0,
-        egui::Stroke::new(1.0, Color32::from_rgb(69, 69, 69)),
+        egui::Stroke::new(1.0_f32, Color32::from_rgb(69, 69, 69)),
     );
 
     let font_id = egui::FontId::monospace(12.0);

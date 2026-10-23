@@ -479,8 +479,11 @@ fn render_go_to_offset_dialog(
 
     // Draw dialog background with border
     ui.painter().rect_filled(dialog_rect, 4.0, theme.gutter_bg);
-    ui.painter()
-        .rect_stroke(dialog_rect, 4.0, egui::Stroke::new(1.0, theme.gutter_fg));
+    ui.painter().rect_stroke(
+        dialog_rect,
+        4.0,
+        egui::Stroke::new(1.0_f32, theme.gutter_fg),
+    );
 
     // Label
     ui.painter().text(

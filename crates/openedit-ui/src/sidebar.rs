@@ -226,7 +226,7 @@ fn render_tree_node(
                 let folder_icon = if node.expanded { "[-]" } else { "[+]" };
                 let label_response = ui.add(
                     egui::Label::new(
-                        egui::RichText::new(format!("{} {}", folder_icon, &node.name))
+                        egui::RichText::new(format!("{} {}", folder_icon, node.name))
                             .color(theme.foreground),
                     )
                     .sense(egui::Sense::click()),
@@ -246,7 +246,7 @@ fn render_tree_node(
                 let file_icon = file_icon_for_name(&node.name);
                 let label_response = ui.add(
                     egui::Label::new(
-                        egui::RichText::new(format!("{} {}", file_icon, &node.name))
+                        egui::RichText::new(format!("{} {}", file_icon, node.name))
                             .color(theme.foreground),
                     )
                     .sense(egui::Sense::click()),

@@ -1054,7 +1054,7 @@ pub fn render_lsp_autocomplete(
     ui.painter().rect_stroke(
         popup_rect,
         4.0,
-        egui::Stroke::new(1.0, egui::Color32::from_rgb(69, 69, 69)),
+        egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(69, 69, 69)),
     );
 
     let font_id = egui::FontId::monospace(12.0);
@@ -1188,7 +1188,7 @@ pub fn render_diagnostic_squiggles(
         if points.len() >= 2 {
             for pair in points.windows(2) {
                 ui.painter()
-                    .line_segment([pair[0], pair[1]], egui::Stroke::new(1.2, color));
+                    .line_segment([pair[0], pair[1]], egui::Stroke::new(1.2_f32, color));
             }
         }
     }
@@ -1224,7 +1224,7 @@ pub fn render_hover_tooltip(ui: &mut egui::Ui, text: &str, pos: egui::Pos2) {
     ui.painter().rect_stroke(
         popup_rect,
         4.0,
-        egui::Stroke::new(1.0, egui::Color32::from_rgb(80, 80, 80)),
+        egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(80, 80, 80)),
     );
 
     ui.painter().text(

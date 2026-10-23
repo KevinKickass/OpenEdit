@@ -714,7 +714,7 @@ fn render_unknown(
     // Background
     let bg_rect = Rect::from_min_size(origin, Vec2::new(available_width, block_height));
     painter.rect_filled(bg_rect, 4.0, colors.background);
-    painter.rect_stroke(bg_rect, 4.0, Stroke::new(1.0, colors.node_stroke));
+    painter.rect_stroke(bg_rect, 4.0, Stroke::new(1.0_f32, colors.node_stroke));
 
     // Header
     painter.text(
@@ -957,7 +957,7 @@ fn draw_node(
     font: &egui::FontId,
     colors: &MermaidColors,
 ) {
-    let stroke = Stroke::new(2.0, colors.node_stroke);
+    let stroke = Stroke::new(2.0_f32, colors.node_stroke);
     let center = ln.rect.center();
 
     match ln.shape {
@@ -1200,7 +1200,7 @@ fn render_sequence(
             r,
             4.0,
             colors.participant_fill,
-            Stroke::new(2.0, colors.node_stroke),
+            Stroke::new(2.0_f32, colors.node_stroke),
         );
         painter.text(
             r.center(),
@@ -1213,7 +1213,7 @@ fn render_sequence(
 
     // Draw lifelines
     let lifeline_bottom = lifeline_top + sd.messages.len() as f32 * msg_row_h;
-    let lifeline_stroke = Stroke::new(1.0, colors.node_stroke.linear_multiply(0.4));
+    let lifeline_stroke = Stroke::new(1.0_f32, colors.node_stroke.linear_multiply(0.4));
     for &cx in &centers_x {
         draw_dashed_line(
             painter,
@@ -1237,7 +1237,7 @@ fn render_sequence(
             r,
             4.0,
             colors.participant_fill,
-            Stroke::new(2.0, colors.node_stroke),
+            Stroke::new(2.0_f32, colors.node_stroke),
         );
         painter.text(
             r.center(),

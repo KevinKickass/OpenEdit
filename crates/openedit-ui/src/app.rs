@@ -3640,7 +3640,7 @@ impl eframe::App for OpenEditApp {
                                 egui::Pos2::new(x, divider_rect.top()),
                                 egui::Pos2::new(x, divider_rect.bottom()),
                             ],
-                            egui::Stroke::new(1.0, sep_color),
+                            egui::Stroke::new(1.0_f32, sep_color),
                         );
                     } else {
                         let y = divider_rect.center().y;
@@ -3649,7 +3649,7 @@ impl eframe::App for OpenEditApp {
                                 egui::Pos2::new(divider_rect.left(), y),
                                 egui::Pos2::new(divider_rect.right(), y),
                             ],
-                            egui::Stroke::new(1.0, sep_color),
+                            egui::Stroke::new(1.0_f32, sep_color),
                         );
                     }
 
@@ -3754,7 +3754,7 @@ impl eframe::App for OpenEditApp {
                             egui::Pos2::new(editor_rect.left() + half_w, editor_rect.top()),
                             egui::Pos2::new(editor_rect.left() + half_w, editor_rect.bottom()),
                         ],
-                        egui::Stroke::new(2.0, self.theme.gutter_bg),
+                        egui::Stroke::new(2.0_f32, self.theme.gutter_bg),
                     );
 
                     // Editor pane

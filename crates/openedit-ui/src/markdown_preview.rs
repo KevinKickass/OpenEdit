@@ -160,7 +160,7 @@ pub fn render_markdown_preview(
                             Pos2::new(rect.left() + padding, line_y),
                             Pos2::new(rect.left() + padding + content_width, line_y),
                         ],
-                        egui::Stroke::new(1.0, theme.gutter_fg),
+                        egui::Stroke::new(1.0_f32, theme.gutter_fg),
                     );
                 }
                 y += 4.0;
@@ -209,7 +209,7 @@ pub fn render_markdown_preview(
                     ui.painter().rect_stroke(
                         code_rect,
                         4.0,
-                        egui::Stroke::new(1.0, theme.gutter_fg),
+                        egui::Stroke::new(1.0_f32, theme.gutter_fg),
                     );
 
                     let code_y = y + 8.0;
@@ -358,7 +358,7 @@ pub fn render_markdown_preview(
                             Pos2::new(rect.left() + padding, y + 8.0),
                             Pos2::new(rect.left() + padding + content_width, y + 8.0),
                         ],
-                        egui::Stroke::new(1.0, theme.gutter_fg),
+                        egui::Stroke::new(1.0_f32, theme.gutter_fg),
                     );
                 }
                 y += 24.0;
@@ -393,7 +393,7 @@ pub fn render_markdown_preview(
                             Pos2::new(bar_x, y - 2.0),
                             Pos2::new(bar_x, y + rendered_height + 2.0),
                         ],
-                        egui::Stroke::new(3.0, theme.gutter_fg),
+                        egui::Stroke::new(3.0_f32, theme.gutter_fg),
                     );
 
                     let h = render_rich_spans_wrapped(
@@ -440,7 +440,7 @@ pub fn render_markdown_preview(
                     ui.painter().rect_stroke(
                         table_rect,
                         2.0,
-                        egui::Stroke::new(1.0, theme.gutter_fg),
+                        egui::Stroke::new(1.0_f32, theme.gutter_fg),
                     );
 
                     // Header background
@@ -476,7 +476,7 @@ pub fn render_markdown_preview(
                             Pos2::new(table_x, hline_y),
                             Pos2::new(table_x + content_width, hline_y),
                         ],
-                        egui::Stroke::new(1.0, theme.gutter_fg),
+                        egui::Stroke::new(1.0_f32, theme.gutter_fg),
                     );
 
                     // Render body rows
@@ -522,7 +522,7 @@ pub fn render_markdown_preview(
                                 Pos2::new(table_x, rline_y),
                                 Pos2::new(table_x + content_width, rline_y),
                             ],
-                            egui::Stroke::new(0.5, theme.gutter_fg),
+                            egui::Stroke::new(0.5_f32, theme.gutter_fg),
                         );
                     }
 
@@ -531,7 +531,7 @@ pub fn render_markdown_preview(
                         let cx = table_x + col_idx as f32 * col_width;
                         ui.painter().line_segment(
                             [Pos2::new(cx, y), Pos2::new(cx, y + table_height)],
-                            egui::Stroke::new(0.5, theme.gutter_fg),
+                            egui::Stroke::new(0.5_f32, theme.gutter_fg),
                         );
                     }
                 }
@@ -559,7 +559,7 @@ pub fn render_markdown_preview(
                     ui.painter().rect_stroke(
                         img_rect,
                         4.0,
-                        egui::Stroke::new(1.0, theme.gutter_fg),
+                        egui::Stroke::new(1.0_f32, theme.gutter_fg),
                     );
 
                     let font = egui::FontId::proportional(font_size);
@@ -661,7 +661,7 @@ fn render_rich_spans(
             let mid_y = y + font_size / 2.0;
             ui.painter().line_segment(
                 [Pos2::new(cx, mid_y), Pos2::new(cx + gw, mid_y)],
-                egui::Stroke::new(1.0, color),
+                egui::Stroke::new(1.0_f32, color),
             );
         }
 
@@ -670,7 +670,7 @@ fn render_rich_spans(
             let ul_y = y + font_size + 1.0;
             ui.painter().line_segment(
                 [Pos2::new(cx, ul_y), Pos2::new(cx + gw, ul_y)],
-                egui::Stroke::new(1.0, link_color),
+                egui::Stroke::new(1.0_f32, link_color),
             );
         }
 
@@ -753,7 +753,7 @@ fn render_rich_spans_wrapped(
             let mid_y = cy + font_size / 2.0;
             ui.painter().line_segment(
                 [Pos2::new(x + cx, mid_y), Pos2::new(x + cx + gw, mid_y)],
-                egui::Stroke::new(1.0, color),
+                egui::Stroke::new(1.0_f32, color),
             );
         }
 
@@ -762,7 +762,7 @@ fn render_rich_spans_wrapped(
             let ul_y = cy + font_size + 1.0;
             ui.painter().line_segment(
                 [Pos2::new(x + cx, ul_y), Pos2::new(x + cx + gw, ul_y)],
-                egui::Stroke::new(1.0, link_color),
+                egui::Stroke::new(1.0_f32, link_color),
             );
         }
 

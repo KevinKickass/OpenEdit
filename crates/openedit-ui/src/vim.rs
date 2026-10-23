@@ -1369,7 +1369,7 @@ mod tests {
     }
 
     #[test]
-    fn test_vim_gg_and_G() {
+    fn test_vim_gg_and_g() {
         let mut state = VimState::new();
         state.enabled = true;
         let mut doc = Document::from_str("line1\nline2\nline3\nline4");
