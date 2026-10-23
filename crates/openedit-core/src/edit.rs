@@ -392,6 +392,26 @@ mod tests {
     }
 
     #[test]
+    fn test_insert_unicode_text_then_type_at_cursor() {
+        let mut buf = Buffer::from_str("ab");
+        let mut cur = Cursor::new(0, 1);
+        insert_text(&mut buf, &mut cur, "ä🙂");
+        assert_eq!(cur.position, Position::new(0, 3));
+        insert_char(&mut buf, &mut cur, '!');
+        assert_eq!(buf.to_string(), "aä🙂!b");
+    }
+
+    #[test]
+    fn test_insert_multiline_unicode_text_then_type_at_cursor() {
+        let mut buf = Buffer::from_str("ab");
+        let mut cur = Cursor::new(0, 1);
+        insert_text(&mut buf, &mut cur, "ü\n界🙂");
+        assert_eq!(cur.position, Position::new(1, 2));
+        insert_char(&mut buf, &mut cur, '!');
+        assert_eq!(buf.to_string(), "aü\n界🙂!b");
+    }
+
+    #[test]
     fn test_insert_newline() {
         let mut buf = Buffer::from_str("ab");
         let mut cur = Cursor::new(0, 1);

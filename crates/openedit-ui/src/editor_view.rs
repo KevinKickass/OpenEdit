@@ -590,7 +590,7 @@ pub fn render_editor(
                 // Vertical guide line
                 ui.painter().line_segment(
                     [Pos2::new(x, y), Pos2::new(x, y + line_height)],
-                    egui::Stroke::new(1.0, indent_guide_line_color),
+                    egui::Stroke::new(1.0_f32, indent_guide_line_color),
                 );
             }
         }
@@ -774,7 +774,7 @@ pub fn render_editor(
                         ph_rect,
                         2.0,
                         egui::Stroke::new(
-                            1.0,
+                            1.0_f32,
                             egui::Color32::from_rgba_premultiplied(0, 200, 220, 120),
                         ),
                     );
@@ -784,7 +784,7 @@ pub fn render_editor(
                     let underline_y = y + line_height - 1.0;
                     ui.painter().line_segment(
                         [Pos2::new(x, underline_y), Pos2::new(x + width, underline_y)],
-                        egui::Stroke::new(1.5, inactive_color),
+                        egui::Stroke::new(1.5_f32, inactive_color),
                     );
                 }
             }
@@ -854,7 +854,7 @@ pub fn render_editor(
     }
 
     // Mouse position to document position helper (accounts for folding + wrapping)
-    let mouse_to_doc_pos = |pos: Pos2| -> Position {
+    let mouse_to_doc_pos = |pos: Pos2, doc: &Document| -> Position {
         let screen_row = ((pos.y - rect.top()) / line_height) as usize;
         // Find the visual row for this screen row
         let (line_idx, col_offset) = displayed_vrows
@@ -879,108 +879,7 @@ pub fn render_editor(
     view_state.hover_request = None;
     view_state.diagnostic_hover = None;
 
-    // Safety: clear stale dragging state if pointer is no longer held
-    // (handles edge case where drag_stopped() didn't fire, e.g. pointer released outside window)
-    if view_state.dragging && !response.dragged() && ui.input(|i| !i.pointer.any_down()) {
-        view_state.dragging = false;
-        view_state.block_selecting = false;
-        view_state.block_select_start = None;
-    }
-
-    // Mouse click to position cursor (with Alt+drag block selection, Ctrl+click go-to-definition)
-    if response.drag_started() {
-        if let Some(pos) = response.interact_pointer_pos() {
-            if pos.x >= text_left {
-                let doc_pos = mouse_to_doc_pos(pos);
-                let alt = ui.input(|i| i.modifiers.alt);
-                let shift = ui.input(|i| i.modifiers.shift);
-                let ctrl = ui.input(|i| i.modifiers.ctrl || i.modifiers.mac_cmd);
-                if ctrl && !shift && !alt {
-                    // Ctrl+Click: go to definition
-                    view_state.ctrl_click_pos = Some(doc_pos);
-                    doc.cursors.primary_mut().move_to(doc_pos, false);
-                    view_state.dragging = false;
-                    view_state.block_selecting = false;
-                    view_state.block_select_start = None;
-                } else if alt {
-                    // Start block/column selection
-                    view_state.block_selecting = true;
-                    view_state.block_select_start = Some(doc_pos);
-                    doc.cursors.clear_extra_cursors();
-                    doc.cursors.primary_mut().move_to(doc_pos, false);
-                    view_state.dragging = true;
-                } else {
-                    // Normal drag — clear any block selection cursors and stale anchor
-                    view_state.block_selecting = false;
-                    view_state.block_select_start = None;
-                    if doc.cursors.cursor_count() > 1 {
-                        doc.cursors.primary_mut().clear_selection();
-                    }
-                    doc.cursors.clear_extra_cursors();
-                    doc.cursors.primary_mut().move_to(doc_pos, shift);
-                    view_state.dragging = true;
-                }
-            }
-        }
-    }
-
-    // Mouse drag to extend selection (or block selection)
-    if response.dragged() && view_state.dragging {
-        if let Some(pos) = response.interact_pointer_pos() {
-            let doc_pos = mouse_to_doc_pos(pos);
-            if view_state.block_selecting {
-                if let Some(start) = view_state.block_select_start {
-                    create_block_cursors(doc, &start, &doc_pos);
-                }
-            } else {
-                doc.cursors.primary_mut().move_to(doc_pos, true);
-            }
-        }
-    }
-
-    // Simple click (no drag movement) — position cursor and clear selection
-    if response.clicked() && !view_state.dragging {
-        // Always clear block selection state on any non-Alt click
-        if !ui.input(|i| i.modifiers.alt) {
-            view_state.block_selecting = false;
-            view_state.block_select_start = None;
-        }
-        let click_shift = ui.input(|i| i.modifiers.shift);
-        let click_pointer = ui.input(|i| i.pointer.interact_pos());
-        if let Some(pos) = click_pointer {
-            if pos.x >= text_left {
-                // Inline position calculation (avoids extending mouse_to_doc_pos borrow)
-                let screen_row = ((pos.y - rect.top()) / line_height) as usize;
-                let (line_idx, col_offset) = displayed_vrows
-                    .iter()
-                    .find(|(r, _)| *r == screen_row)
-                    .map(|&(_, vr)| (vr.line_idx, vr.col_offset))
-                    .unwrap_or_else(|| {
-                        displayed_vrows
-                            .last()
-                            .map(|&(_, vr)| (vr.line_idx, vr.col_offset))
-                            .unwrap_or((0, 0))
-                    });
-                let raw_col =
-                    (((pos.x - text_left - 4.0) / char_width).round() as isize).max(0) as usize;
-                let col = col_offset + raw_col + (if word_wrap { 0 } else { scroll_col });
-                let line = line_idx.min(total_lines.saturating_sub(1));
-                let col = col.min(doc.buffer.line_len_chars_no_newline(line));
-                let doc_pos = Position::new(line, col);
-                if doc.cursors.cursor_count() > 1 {
-                    doc.cursors.primary_mut().clear_selection();
-                }
-                doc.cursors.clear_extra_cursors();
-                doc.cursors.primary_mut().move_to(doc_pos, click_shift);
-            }
-        }
-    }
-
-    if response.drag_stopped() {
-        view_state.dragging = false;
-        view_state.block_selecting = false;
-        view_state.block_select_start = None;
-    }
+    handle_pointer_selection(ui, &response, doc, view_state, text_left, mouse_to_doc_pos);
 
     // Ctrl+hover: request LSP hover info, or show diagnostic tooltip on hover
     if response.hovered() {
@@ -1092,6 +991,95 @@ pub fn render_editor(
     }
 
     modified
+}
+
+/// Start selection at the press position, before egui's drag threshold is crossed.
+/// Keep the anchor through movement and process the final release position as well.
+fn handle_pointer_selection(
+    ui: &Ui,
+    response: &egui::Response,
+    doc: &mut Document,
+    view_state: &mut EditorViewState,
+    text_left: f32,
+    position_at: impl Fn(Pos2, &Document) -> Position,
+) {
+    let (press, down, released, pointer_pos) = ui.input(|i| {
+        // press_origin is cleared on release, including a quick click whose
+        // press and release are delivered together. Preserve the event itself.
+        let press = i.events.iter().find_map(|event| match event {
+            egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers,
+            } => Some((*pos, *modifiers)),
+            _ => None,
+        });
+        (
+            press,
+            i.pointer.primary_down(),
+            i.pointer.primary_released(),
+            i.pointer.interact_pos(),
+        )
+    });
+    // egui may report neither click nor drag when a complete drag arrives in
+    // one frame. Accept it only within this enabled, unobscured editor.
+    let completed_in_frame = released
+        && !down
+        && response.enabled()
+        && response.contains_pointer()
+        && press.is_some_and(|(pos, _)| {
+            response.interact_rect.contains(pos)
+                && ui.ctx().layer_id_at(pos) == Some(response.layer_id)
+        });
+    if response.is_pointer_button_down_on()
+        || response.clicked()
+        || response.drag_stopped_by(egui::PointerButton::Primary)
+        || completed_in_frame
+    {
+        if let Some((pos, modifiers)) = press.filter(|(pos, _)| pos.x >= text_left) {
+            let doc_pos = position_at(pos, doc);
+            let was_block = view_state.block_selecting || doc.cursors.cursor_count() > 1;
+            view_state.block_selecting = false;
+            view_state.block_select_start = None;
+            view_state.dragging = false;
+            if was_block {
+                doc.cursors.primary_mut().clear_selection();
+            }
+            doc.cursors.clear_extra_cursors();
+            if (modifiers.ctrl || modifiers.mac_cmd) && !modifiers.shift && !modifiers.alt {
+                view_state.ctrl_click_pos = Some(doc_pos);
+                doc.cursors.primary_mut().move_to(doc_pos, false);
+            } else {
+                doc.cursors
+                    .primary_mut()
+                    .move_to(doc_pos, modifiers.shift && !modifiers.alt);
+                view_state.dragging = true;
+                if modifiers.alt {
+                    view_state.block_selecting = true;
+                    view_state.block_select_start = Some(doc_pos);
+                }
+            }
+        }
+    }
+
+    if view_state.dragging && (down || released) {
+        if let Some(pos) = pointer_pos {
+            let doc_pos = position_at(pos, doc);
+            if let Some(start) = view_state.block_select_start {
+                create_block_cursors(doc, &start, &doc_pos);
+            } else if doc_pos != doc.cursors.primary().position {
+                doc.cursors.primary_mut().move_to(doc_pos, true);
+            }
+        }
+        // Input is handled after painting, so show the new selection immediately.
+        ui.ctx().request_repaint();
+    }
+    if !down {
+        view_state.dragging = false;
+        view_state.block_selecting = false;
+        view_state.block_select_start = None;
+    }
 }
 
 /// Create multi-cursors forming a rectangular block selection.
@@ -1238,8 +1226,13 @@ fn render_selection_wrapped(
             line_len
         };
 
-        // Clamp selection to this visual row's range
-        let start_col = sel_line_start.max(vr.col_offset);
+        // Horizontal scrolling changes the first visible column without wrapping.
+        let first_col = if word_wrap {
+            vr.col_offset
+        } else {
+            doc.scroll_col
+        };
+        let start_col = sel_line_start.max(first_col);
         let end_col = sel_line_end.min(vr_end);
 
         if start_col >= end_col {
@@ -1247,8 +1240,8 @@ fn render_selection_wrapped(
         }
 
         let y = rect.top() + screen_row as f32 * line_height;
-        let x1 = text_left + 4.0 + (start_col - vr.col_offset) as f32 * char_width;
-        let x2 = text_left + 4.0 + (end_col - vr.col_offset) as f32 * char_width;
+        let x1 = text_left + 4.0 + (start_col - first_col) as f32 * char_width;
+        let x2 = text_left + 4.0 + (end_col - first_col) as f32 * char_width;
 
         let sel_rect = Rect::from_min_max(
             Pos2::new(x1.max(text_left), y),
@@ -2009,26 +2002,11 @@ fn find_matching_bracket(doc: &Document, cursor_pos: &Position) -> Option<Positi
     };
 
     // Try character at cursor first, then before cursor
-    let (check_offset, ch) = if let Some(c) = at_cursor {
-        if is_bracket(c) {
-            (offset, c)
-        } else if let Some(c2) = before_cursor {
-            if is_bracket(c2) {
-                (offset - 1, c2)
-            } else {
-                return None;
-            }
-        } else {
-            return None;
-        }
-    } else if let Some(c) = before_cursor {
-        if is_bracket(c) {
-            (offset - 1, c)
-        } else {
-            return None;
-        }
+    let (check_offset, ch) = if let Some(c) = at_cursor.filter(|c| is_bracket(*c)) {
+        (offset, c)
     } else {
-        return None;
+        let c = before_cursor.filter(|c| is_bracket(*c))?;
+        (offset - 1, c)
     };
 
     let (open, close, forward) = match ch {
@@ -2144,5 +2122,276 @@ fn ensure_cursor_visible_wrapped(
         } else if cursor_col >= doc.scroll_col + visible_cols {
             doc.scroll_col = cursor_col.saturating_sub(visible_cols - 5);
         }
+    }
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::*;
+    use egui::{Event, Modifiers, PointerButton};
+    use openedit_core::Buffer;
+
+    fn pointer_event(col: usize, line: usize, pressed: bool, modifiers: Modifiers) -> Event {
+        Event::PointerButton {
+            pos: Pos2::new(20.0 + col as f32 * 10.0, 20.0 + line as f32 * 20.0),
+            button: PointerButton::Primary,
+            pressed,
+            modifiers,
+        }
+    }
+
+    fn frame(
+        ctx: &egui::Context,
+        doc: &mut Document,
+        state: &mut EditorViewState,
+        events: Vec<Event>,
+        modifiers: Modifiers,
+    ) {
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(500.0, 200.0))),
+                events,
+                modifiers,
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let response = ui.allocate_rect(
+                        Rect::from_min_max(Pos2::new(10.0, 10.0), Pos2::new(490.0, 190.0)),
+                        egui::Sense::click_and_drag(),
+                    );
+                    handle_pointer_selection(ui, &response, doc, state, 20.0, |pos, doc| {
+                        let line = (((pos.y - 20.0) / 20.0).round().max(0.0) as usize)
+                            .min(doc.buffer.len_lines() - 1);
+                        let col = (((pos.x - 20.0) / 10.0).round().max(0.0) as usize)
+                            .min(doc.buffer.line_len_chars_no_newline(line));
+                        Position::new(line, col)
+                    });
+                });
+            },
+        );
+    }
+
+    fn setup() -> (egui::Context, Document, EditorViewState) {
+        let ctx = egui::Context::default();
+        let mut doc = Document::new();
+        doc.buffer = Buffer::from_str("0123456789\nabcdefghij\nABCDEFGHIJ");
+        let mut state = EditorViewState::default();
+        frame(&ctx, &mut doc, &mut state, vec![], Modifiers::NONE);
+        (ctx, doc, state)
+    }
+
+    #[test]
+    fn drag_keeps_press_anchor_in_both_directions_and_includes_release() {
+        for (start, middle, end) in [(1, 5, 8), (8, 5, 1)] {
+            let (ctx, mut doc, mut state) = setup();
+            frame(
+                &ctx,
+                &mut doc,
+                &mut state,
+                vec![pointer_event(start, 0, true, Modifiers::NONE)],
+                Modifiers::NONE,
+            );
+            frame(
+                &ctx,
+                &mut doc,
+                &mut state,
+                vec![Event::PointerMoved(Pos2::new(
+                    20.0 + middle as f32 * 10.0,
+                    20.0,
+                ))],
+                Modifiers::NONE,
+            );
+            assert_eq!(doc.cursors.primary().anchor, Some(Position::new(0, start)));
+            frame(
+                &ctx,
+                &mut doc,
+                &mut state,
+                vec![pointer_event(end, 0, false, Modifiers::NONE)],
+                Modifiers::NONE,
+            );
+            assert_eq!(doc.cursors.primary().position, Position::new(0, end));
+            assert_eq!(doc.cursors.primary().anchor, Some(Position::new(0, start)));
+            assert!(!state.dragging);
+        }
+    }
+
+    #[test]
+    fn shift_click_after_block_selection_returns_to_linear_selection() {
+        let (ctx, mut doc, mut state) = setup();
+        let alt = Modifiers {
+            alt: true,
+            ..Modifiers::NONE
+        };
+        frame(
+            &ctx,
+            &mut doc,
+            &mut state,
+            vec![pointer_event(1, 0, true, alt)],
+            alt,
+        );
+        frame(
+            &ctx,
+            &mut doc,
+            &mut state,
+            vec![pointer_event(4, 2, false, alt)],
+            alt,
+        );
+        assert_eq!(doc.cursors.cursor_count(), 3);
+        let old_position = doc.cursors.primary().position;
+        let shift = Modifiers {
+            shift: true,
+            ..Modifiers::NONE
+        };
+        frame(
+            &ctx,
+            &mut doc,
+            &mut state,
+            vec![pointer_event(7, 1, true, shift)],
+            shift,
+        );
+        frame(
+            &ctx,
+            &mut doc,
+            &mut state,
+            vec![pointer_event(7, 1, false, shift)],
+            shift,
+        );
+        assert_eq!(doc.cursors.cursor_count(), 1);
+        assert_eq!(doc.cursors.primary().anchor, Some(old_position));
+        assert_eq!(doc.cursors.primary().position, Position::new(1, 7));
+        assert!(!state.block_selecting);
+        assert_eq!(state.block_select_start, None);
+    }
+
+    #[test]
+    fn horizontally_scrolled_selection_matches_visible_text_columns() {
+        let ctx = egui::Context::default();
+        let mut doc = Document::new();
+        doc.buffer = Buffer::from_str("0123456789");
+        doc.scroll_col = 4;
+        let theme = EditorTheme::dark();
+        let output = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let row = VisualRow {
+                    line_idx: 0,
+                    col_offset: 0,
+                    is_first: true,
+                };
+                render_selection_wrapped(
+                    ui,
+                    &Position::new(0, 2),
+                    &Position::new(0, 7),
+                    &[(0, &row)],
+                    20.0,
+                    Rect::from_min_max(Pos2::ZERO, Pos2::new(500.0, 200.0)),
+                    &doc,
+                    &theme,
+                    20.0,
+                    10.0,
+                    false,
+                    usize::MAX,
+                );
+            });
+        });
+        let selection = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Rect(rect) if rect.fill == theme.selection_bg => Some(rect.rect),
+                _ => None,
+            })
+            .expect("selection rectangle");
+        // Columns 0..4 are off screen; only columns 4..7 should be highlighted.
+        assert_eq!(selection.min.x, 24.0);
+        assert_eq!(selection.max.x, 54.0);
+    }
+
+    #[test]
+    fn same_frame_drag_preserves_both_endpoints() {
+        let (ctx, mut doc, mut state) = setup();
+        frame(
+            &ctx,
+            &mut doc,
+            &mut state,
+            vec![
+                pointer_event(1, 0, true, Modifiers::NONE),
+                Event::PointerMoved(Pos2::new(100.0, 20.0)),
+                pointer_event(8, 0, false, Modifiers::NONE),
+            ],
+            Modifiers::NONE,
+        );
+        assert_eq!(doc.cursors.primary().position, Position::new(0, 8));
+        assert_eq!(doc.cursors.primary().anchor, Some(Position::new(0, 1)));
+        assert!(!state.dragging);
+    }
+
+    #[test]
+    fn same_frame_click_uses_press_position_and_modifiers() {
+        let (ctx, mut doc, mut state) = setup();
+        doc.cursors.primary_mut().move_to(Position::new(0, 8), true);
+        frame(
+            &ctx,
+            &mut doc,
+            &mut state,
+            vec![
+                pointer_event(3, 0, true, Modifiers::NONE),
+                pointer_event(3, 0, false, Modifiers::NONE),
+            ],
+            Modifiers::NONE,
+        );
+        assert_eq!(doc.cursors.primary().position, Position::new(0, 3));
+        assert!(!doc.cursors.primary().has_selection());
+        let shift = Modifiers {
+            shift: true,
+            ..Modifiers::NONE
+        };
+        frame(
+            &ctx,
+            &mut doc,
+            &mut state,
+            vec![
+                pointer_event(6, 0, true, shift),
+                pointer_event(6, 0, false, Modifiers::NONE),
+            ],
+            Modifiers::NONE,
+        );
+        assert_eq!(doc.cursors.primary().position, Position::new(0, 6));
+        assert_eq!(doc.cursors.primary().anchor, Some(Position::new(0, 3)));
+        assert!(!state.dragging);
+    }
+
+    #[test]
+    fn simple_click_clears_selection_and_ctrl_click_requests_definition() {
+        let (ctx, mut doc, mut state) = setup();
+        doc.cursors.primary_mut().move_to(Position::new(0, 8), true);
+        frame(
+            &ctx,
+            &mut doc,
+            &mut state,
+            vec![pointer_event(3, 0, true, Modifiers::NONE)],
+            Modifiers::NONE,
+        );
+        frame(
+            &ctx,
+            &mut doc,
+            &mut state,
+            vec![pointer_event(3, 0, false, Modifiers::NONE)],
+            Modifiers::NONE,
+        );
+        assert_eq!(doc.cursors.primary().position, Position::new(0, 3));
+        assert!(!doc.cursors.primary().has_selection());
+        let ctrl = Modifiers {
+            ctrl: true,
+            ..Modifiers::NONE
+        };
+        frame(
+            &ctx,
+            &mut doc,
+            &mut state,
+            vec![pointer_event(6, 0, true, ctrl)],
+            ctrl,
+        );
+        assert_eq!(state.ctrl_click_pos, Some(Position::new(0, 6)));
     }
 }
