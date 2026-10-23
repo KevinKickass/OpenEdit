@@ -3196,9 +3196,7 @@ impl eframe::App for OpenEditApp {
                                 let path_buf = std::path::Path::new(&path);
                                 let dir = path_buf.parent().unwrap_or(path_buf);
 
-                                let _ = std::process::Command::new("xdg-open")
-                                    .arg(dir)
-                                    .spawn();
+                                let _ = std::process::Command::new("xdg-open").arg(dir).spawn();
                             }
 
                             #[cfg(target_os = "macos")]
@@ -4703,11 +4701,7 @@ impl eframe::App for OpenEditApp {
                 egui::Order::Foreground,
                 egui::Id::new("drop_overlay"),
             ));
-            painter.rect_filled(
-                screen_rect,
-                0.0,
-                egui::Color32::from_black_alpha(120),
-            );
+            painter.rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(120));
             painter.text(
                 screen_rect.center(),
                 egui::Align2::CENTER_CENTER,

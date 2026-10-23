@@ -194,16 +194,13 @@ fn render_tree_node(
     active_path: Option<&Path>,
 ) -> Option<PathBuf> {
     let indent = depth as f32 * 16.0 + 4.0;
-    let is_active_file = !node.is_dir
-        && active_path.is_some_and(|active| node.path.as_path() == active);
+    let is_active_file =
+        !node.is_dir && active_path.is_some_and(|active| node.path.as_path() == active);
 
     // Allocate a full-width row so the active-file background spans the Explorer.
     let row_width = ui.available_width();
     let row_height = ui.spacing().interact_size.y;
-    let row_rect = egui::Rect::from_min_size(
-        ui.cursor().min,
-        egui::vec2(row_width, row_height),
-    );
+    let row_rect = egui::Rect::from_min_size(ui.cursor().min, egui::vec2(row_width, row_height));
 
     if is_active_file {
         ui.painter().rect_filled(row_rect, 2.0, theme.selection_bg);
@@ -222,12 +219,8 @@ fn render_tree_node(
                     "\u{25B6}"
                 };
                 let arrow_response = ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(arrow)
-                            .size(10.0)
-                            .color(theme.gutter_fg),
-                    )
-                    .sense(egui::Sense::click()),
+                    egui::Label::new(egui::RichText::new(arrow).size(10.0).color(theme.gutter_fg))
+                        .sense(egui::Sense::click()),
                 );
 
                 let folder_icon = if node.expanded { "[-]" } else { "[+]" };
