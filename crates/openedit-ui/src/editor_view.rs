@@ -881,6 +881,16 @@ pub fn render_editor(
 
     handle_pointer_selection(ui, &response, doc, view_state, text_left, mouse_to_doc_pos);
 
+    if response.secondary_clicked() {
+        if let Some(pos) = response
+            .interact_pointer_pos()
+            .filter(|pos| pos.x >= text_left)
+        {
+            prepare_context_selection(doc, mouse_to_doc_pos(pos, doc));
+        }
+    }
+    let context_modified = render_editor_context_menu(&response, doc, macro_rec);
+
     // Ctrl+hover: request LSP hover info, or show diagnostic tooltip on hover
     if response.hovered() {
         if let Some(hover_pos) = ui.input(|i| i.pointer.hover_pos()) {
@@ -953,7 +963,8 @@ pub fn render_editor(
 
     // Keyboard input
     let cursor_before = doc.cursors.primary().position;
-    let modified = handle_keyboard_input(ui, doc, macro_rec, snippet_engine, vim_state);
+    let modified =
+        handle_keyboard_input(ui, doc, macro_rec, snippet_engine, vim_state) || context_modified;
     let cursor_moved_by_keyboard = doc.cursors.primary().position != cursor_before || modified;
 
     // Update autocomplete after edits
@@ -990,6 +1001,139 @@ pub fn render_editor(
         ensure_cursor_visible_wrapped(doc, visible_lines, total_lines, word_wrap, wrap_cols);
     }
 
+    modified
+}
+
+#[derive(Clone, Copy)]
+enum ContextAction {
+    Undo,
+    Redo,
+    Cut,
+    Copy,
+    Paste,
+    Delete,
+    SelectAll,
+}
+
+fn prepare_context_selection(doc: &mut Document, pos: Position) {
+    let inside_selection = doc.cursors.cursors().iter().any(|cursor| {
+        cursor
+            .selection_range()
+            .is_some_and(|(start, end)| start <= pos && pos < end)
+    });
+    if !inside_selection {
+        doc.cursors.clear_extra_cursors();
+        doc.cursors.primary_mut().move_to(pos, false);
+    }
+}
+
+fn context_action_enabled(doc: &Document, action: ContextAction) -> bool {
+    let selected = doc.cursors.cursors().iter().any(|c| c.has_selection());
+    match action {
+        ContextAction::Undo => !doc.read_only && doc.undo_manager.can_undo(),
+        ContextAction::Redo => !doc.read_only && doc.undo_manager.can_redo(),
+        ContextAction::Cut | ContextAction::Delete => !doc.read_only && selected,
+        ContextAction::Copy => selected,
+        ContextAction::Paste => !doc.read_only,
+        ContextAction::SelectAll => true,
+    }
+}
+
+fn apply_context_action(
+    ctx: &egui::Context,
+    doc: &mut Document,
+    macro_rec: &mut MacroRecorder,
+    action: ContextAction,
+) -> bool {
+    if !context_action_enabled(doc, action) {
+        return false;
+    }
+    let (key, ctrl, modified) = match action {
+        ContextAction::Undo => {
+            doc.undo();
+            ("Z", true, true)
+        }
+        ContextAction::Redo => {
+            doc.redo();
+            ("Y", true, true)
+        }
+        ContextAction::Cut => {
+            ctx.copy_text(doc.selected_text());
+            doc.delete_selection_public();
+            ("X", true, true)
+        }
+        ContextAction::Copy => {
+            ctx.copy_text(doc.selected_text());
+            ("C", true, false)
+        }
+        ContextAction::Paste => {
+            // The native backend returns Event::Paste; the normal editor input
+            // path inserts and records the actual clipboard text next frame.
+            ctx.send_viewport_cmd(egui::ViewportCommand::RequestPaste);
+            return false;
+        }
+        ContextAction::Delete => {
+            doc.delete_selection_public();
+            ("Delete", false, true)
+        }
+        ContextAction::SelectAll => {
+            doc.select_all();
+            ("A", true, false)
+        }
+    };
+    macro_rec.record_action(MacroAction::KeyAction {
+        key: key.to_string(),
+        ctrl,
+        shift: false,
+        alt: false,
+    });
+    ctx.request_repaint();
+    modified
+}
+
+fn render_editor_context_menu(
+    response: &egui::Response,
+    doc: &mut Document,
+    macro_rec: &mut MacroRecorder,
+) -> bool {
+    let mut modified = false;
+    response.context_menu(|ui| {
+        let modifier = if cfg!(target_os = "macos") {
+            "Cmd"
+        } else {
+            "Ctrl"
+        };
+        for (index, (action, label, shortcut)) in [
+            (ContextAction::Undo, "Undo", format!("{modifier}+Z")),
+            (ContextAction::Redo, "Redo", format!("{modifier}+Y")),
+            (ContextAction::Cut, "Cut", format!("{modifier}+X")),
+            (ContextAction::Copy, "Copy", format!("{modifier}+C")),
+            (ContextAction::Paste, "Paste", format!("{modifier}+V")),
+            (ContextAction::Delete, "Delete", "Del".to_string()),
+            (
+                ContextAction::SelectAll,
+                "Select All",
+                format!("{modifier}+A"),
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if index == 2 || index == 6 {
+                ui.separator();
+            }
+            if ui
+                .add_enabled(
+                    context_action_enabled(doc, action),
+                    egui::Button::new(label).shortcut_text(shortcut),
+                )
+                .clicked()
+            {
+                modified |= apply_context_action(ui.ctx(), doc, macro_rec, action);
+                ui.close_menu();
+            }
+        }
+    });
     modified
 }
 
@@ -2130,6 +2274,172 @@ mod selection_tests {
     use super::*;
     use egui::{Event, Modifiers, PointerButton};
     use openedit_core::Buffer;
+
+    fn context_frame(
+        ctx: &egui::Context,
+        doc: &mut Document,
+        events: Vec<Event>,
+    ) -> egui::FullOutput {
+        ctx.run(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(500.0, 400.0))),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let response = ui.allocate_rect(
+                        ui.available_rect_before_wrap(),
+                        egui::Sense::click_and_drag(),
+                    );
+                    render_editor_context_menu(&response, doc, &mut MacroRecorder::default());
+                });
+            },
+        )
+    }
+
+    #[test]
+    fn right_click_opens_menu_and_copy_button_copies_selection() {
+        let ctx = egui::Context::default();
+        let mut doc = Document::new();
+        doc.buffer = Buffer::from_str("selected text");
+        doc.select_all();
+        context_frame(&ctx, &mut doc, vec![]);
+        for pressed in [true, false] {
+            context_frame(
+                &ctx,
+                &mut doc,
+                vec![Event::PointerButton {
+                    pos: Pos2::new(100.0, 50.0),
+                    button: PointerButton::Secondary,
+                    pressed,
+                    modifiers: Modifiers::NONE,
+                }],
+            );
+        }
+        let output = context_frame(&ctx, &mut doc, vec![]);
+        let label_position = |label: &str| {
+            output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == label => {
+                        Some(text.pos + text.galley.size() * 0.5)
+                    }
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("missing menu item: {label}"))
+        };
+        for label in [
+            "Undo",
+            "Redo",
+            "Cut",
+            "Copy",
+            "Paste",
+            "Delete",
+            "Select All",
+        ] {
+            label_position(label);
+        }
+        let pos = label_position("Copy");
+        context_frame(
+            &ctx,
+            &mut doc,
+            vec![Event::PointerButton {
+                pos,
+                button: PointerButton::Primary,
+                pressed: true,
+                modifiers: Modifiers::NONE,
+            }],
+        );
+        let output = context_frame(
+            &ctx,
+            &mut doc,
+            vec![Event::PointerButton {
+                pos,
+                button: PointerButton::Primary,
+                pressed: false,
+                modifiers: Modifiers::NONE,
+            }],
+        );
+        assert_eq!(output.platform_output.copied_text, "selected text");
+        assert_eq!(doc.buffer.to_string(), "selected text");
+    }
+
+    #[test]
+    fn context_click_preserves_selection_inside_and_moves_cursor_outside() {
+        let mut doc = Document::new();
+        doc.buffer = Buffer::from_str("hello world");
+        doc.cursors.primary_mut().move_to(Position::new(0, 5), true);
+        prepare_context_selection(&mut doc, Position::new(0, 2));
+        assert_eq!(doc.selected_text(), "hello");
+        prepare_context_selection(&mut doc, Position::new(0, 8));
+        assert!(!doc.cursors.primary().has_selection());
+        assert_eq!(doc.cursors.primary().position, Position::new(0, 8));
+    }
+
+    #[test]
+    fn context_cut_is_undoable_and_read_only_blocks_changes() {
+        let ctx = egui::Context::default();
+        let mut doc = Document::new();
+        doc.buffer = Buffer::from_str("hello");
+        doc.select_all();
+        let mut recorder = MacroRecorder::default();
+        assert!(apply_context_action(
+            &ctx,
+            &mut doc,
+            &mut recorder,
+            ContextAction::Cut
+        ));
+        assert_eq!(doc.buffer.to_string(), "");
+        assert!(apply_context_action(
+            &ctx,
+            &mut doc,
+            &mut recorder,
+            ContextAction::Undo
+        ));
+        assert_eq!(doc.buffer.to_string(), "hello");
+        assert!(apply_context_action(
+            &ctx,
+            &mut doc,
+            &mut recorder,
+            ContextAction::Redo
+        ));
+        assert_eq!(doc.buffer.to_string(), "");
+        apply_context_action(&ctx, &mut doc, &mut recorder, ContextAction::Undo);
+        doc.select_all();
+        doc.read_only = true;
+        for action in [
+            ContextAction::Cut,
+            ContextAction::Delete,
+            ContextAction::Paste,
+            ContextAction::Undo,
+            ContextAction::Redo,
+        ] {
+            assert!(!context_action_enabled(&doc, action));
+            assert!(!apply_context_action(&ctx, &mut doc, &mut recorder, action));
+        }
+        assert!(context_action_enabled(&doc, ContextAction::Copy));
+        assert_eq!(doc.buffer.to_string(), "hello");
+    }
+
+    #[test]
+    fn context_paste_requests_native_clipboard() {
+        let ctx = egui::Context::default();
+        let mut doc = Document::new();
+        let output = ctx.run(egui::RawInput::default(), |ctx| {
+            apply_context_action(
+                ctx,
+                &mut doc,
+                &mut MacroRecorder::default(),
+                ContextAction::Paste,
+            );
+        });
+        assert!(output.viewport_output[&egui::ViewportId::ROOT]
+            .commands
+            .iter()
+            .any(|command| matches!(command, egui::ViewportCommand::RequestPaste)));
+    }
 
     fn pointer_event(col: usize, line: usize, pressed: bool, modifiers: Modifiers) -> Event {
         Event::PointerButton {
