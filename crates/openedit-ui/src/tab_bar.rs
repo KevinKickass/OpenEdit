@@ -169,13 +169,20 @@ pub fn render_tab_bar(
         }
     });
 
-    // Handle drag end and reorder
-    if let (Some(from_idx), Some(to_idx)) = (drag_state.dragging_tab, drag_state.target_index) {
-        if from_idx != to_idx {
-            response.reorder = Some((from_idx, to_idx));
+    // Handle drag end and reorder — also clean up stale drag state
+    if drag_state.dragging_tab.is_some() {
+        let pointer_released = ui.input(|i| !i.pointer.any_down());
+        if pointer_released {
+            if let (Some(from_idx), Some(to_idx)) =
+                (drag_state.dragging_tab, drag_state.target_index)
+            {
+                if from_idx != to_idx {
+                    response.reorder = Some((from_idx, to_idx));
+                }
+            }
+            drag_state.dragging_tab = None;
+            drag_state.target_index = None;
         }
-        drag_state.dragging_tab = None;
-        drag_state.target_index = None;
     }
 
     response

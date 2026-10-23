@@ -879,6 +879,14 @@ pub fn render_editor(
     view_state.hover_request = None;
     view_state.diagnostic_hover = None;
 
+    // Safety: clear stale dragging state if pointer is no longer held
+    // (handles edge case where drag_stopped() didn't fire, e.g. pointer released outside window)
+    if view_state.dragging && !response.dragged() && ui.input(|i| !i.pointer.any_down()) {
+        view_state.dragging = false;
+        view_state.block_selecting = false;
+        view_state.block_select_start = None;
+    }
+
     // Mouse click to position cursor (with Alt+drag block selection, Ctrl+click go-to-definition)
     if response.drag_started() {
         if let Some(pos) = response.interact_pointer_pos() {
@@ -902,9 +910,12 @@ pub fn render_editor(
                     doc.cursors.primary_mut().move_to(doc_pos, false);
                     view_state.dragging = true;
                 } else {
-                    // Normal drag — clear any block selection cursors
+                    // Normal drag — clear any block selection cursors and stale anchor
                     view_state.block_selecting = false;
                     view_state.block_select_start = None;
+                    if doc.cursors.cursor_count() > 1 {
+                        doc.cursors.primary_mut().clear_selection();
+                    }
                     doc.cursors.clear_extra_cursors();
                     doc.cursors.primary_mut().move_to(doc_pos, shift);
                     view_state.dragging = true;
@@ -929,6 +940,11 @@ pub fn render_editor(
 
     // Simple click (no drag movement) — position cursor and clear selection
     if response.clicked() && !view_state.dragging {
+        // Always clear block selection state on any non-Alt click
+        if !ui.input(|i| i.modifiers.alt) {
+            view_state.block_selecting = false;
+            view_state.block_select_start = None;
+        }
         let click_shift = ui.input(|i| i.modifiers.shift);
         let click_pointer = ui.input(|i| i.pointer.interact_pos());
         if let Some(pos) = click_pointer {
@@ -951,6 +967,9 @@ pub fn render_editor(
                 let line = line_idx.min(total_lines.saturating_sub(1));
                 let col = col.min(doc.buffer.line_len_chars_no_newline(line));
                 let doc_pos = Position::new(line, col);
+                if doc.cursors.cursor_count() > 1 {
+                    doc.cursors.primary_mut().clear_selection();
+                }
                 doc.cursors.clear_extra_cursors();
                 doc.cursors.primary_mut().move_to(doc_pos, click_shift);
             }

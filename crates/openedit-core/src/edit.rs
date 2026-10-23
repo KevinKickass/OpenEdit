@@ -88,14 +88,14 @@ pub fn insert_text(buffer: &mut Buffer, cursor: &mut Cursor, text: &str) {
     let offset = buffer.line_col_to_char(cursor.position.line, cursor.position.col);
     buffer.insert(offset, text);
 
-    // Calculate new cursor position
+    // Calculate new cursor position (use char count, not byte length — ropey uses char indices)
     let newlines = text.chars().filter(|&c| c == '\n').count();
     if newlines > 0 {
         cursor.position.line += newlines;
         let last_line = text.rsplit('\n').next().unwrap_or("");
-        cursor.position.col = last_line.len();
+        cursor.position.col = last_line.chars().count();
     } else {
-        cursor.position.col += text.len();
+        cursor.position.col += text.chars().count();
     }
     cursor.preferred_col = None;
     cursor.clear_selection();

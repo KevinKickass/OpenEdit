@@ -187,6 +187,8 @@ pub struct OpenEditApp {
     updater_state: UpdaterState,
     /// Print / Export-to-PDF dialog state.
     print_dialog_state: PrintDialogState,
+    /// Whether files are currently being dragged over the window.
+    drop_hover_active: bool,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -347,6 +349,7 @@ impl OpenEditApp {
             plugin_panel_state: PluginPanelState::default(),
             updater_state: UpdaterState::default(),
             print_dialog_state: PrintDialogState::default(),
+            drop_hover_active: false,
         };
 
         // Load external plugins from config directory
@@ -2177,25 +2180,46 @@ impl eframe::App for OpenEditApp {
         // Handle drag & drop files
         let dropped: Vec<egui::DroppedFile> = ctx.input(|i| i.raw.dropped_files.clone());
         for file in dropped {
-            if let Some(path) = file.path {
-                // Desktop backend: path is available directly
+            if let Some(mut path) = file.path {
+                // Some Linux compositors pass file:// URIs instead of plain paths
+                if let Some(s) = path.to_str() {
+                    if s.starts_with("file://") {
+                        if let Ok(url) = Url::parse(s) {
+                            if let Ok(file_path) = url.to_file_path() {
+                                path = file_path;
+                            }
+                        }
+                    }
+                }
                 self.open_file(path);
+            } else if !file.name.is_empty() {
+                // Some compositors/platforms pass the path via the name field
+                let name_path = PathBuf::from(&file.name);
+                if name_path.exists() {
+                    self.open_file(name_path);
+                } else if let Some(bytes) = file.bytes {
+                    let text = String::from_utf8_lossy(&bytes);
+                    let mut doc = Document::new();
+                    doc.buffer = Buffer::from_str(&text);
+                    if let Some(ext) = name_path.extension().and_then(|e| e.to_str()) {
+                        doc.language = Some(language_from_extension(ext));
+                    }
+                    self.documents.push(doc);
+                    self.active_tab = self.documents.len() - 1;
+                }
             } else if let Some(bytes) = file.bytes {
                 // Web backend or path unavailable: create buffer from bytes
                 let text = String::from_utf8_lossy(&bytes);
                 let mut doc = Document::new();
                 doc.buffer = Buffer::from_str(&text);
-                // Use the file name (without path) as a display hint
-                if !file.name.is_empty() {
-                    let name_path = PathBuf::from(&file.name);
-                    if let Some(ext) = name_path.extension().and_then(|e| e.to_str()) {
-                        doc.language = Some(language_from_extension(ext));
-                    }
-                }
                 self.documents.push(doc);
                 self.active_tab = self.documents.len() - 1;
             }
         }
+
+        // Show visual feedback when files are being dragged over the window
+        let hovered_files = ctx.input(|i| i.raw.hovered_files.len());
+        self.drop_hover_active = hovered_files > 0;
 
         // Check for external file modifications
         if let Some(ref rx) = self.watcher_rx {
@@ -4655,6 +4679,27 @@ impl eframe::App for OpenEditApp {
                     self.do_print_or_export();
                 }
             }
+        }
+
+        // Drop zone overlay when files are being dragged over the window
+        if self.drop_hover_active {
+            let screen_rect = ctx.screen_rect();
+            let painter = ctx.layer_painter(egui::LayerId::new(
+                egui::Order::Foreground,
+                egui::Id::new("drop_overlay"),
+            ));
+            painter.rect_filled(
+                screen_rect,
+                0.0,
+                egui::Color32::from_black_alpha(120),
+            );
+            painter.text(
+                screen_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "Drop files here to open",
+                egui::FontId::proportional(24.0),
+                egui::Color32::WHITE,
+            );
         }
 
         // Keyboard shortcuts cheatsheet
