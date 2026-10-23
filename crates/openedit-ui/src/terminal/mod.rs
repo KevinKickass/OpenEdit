@@ -164,6 +164,8 @@ impl TerminalState {
             self.tabs.remove(idx);
             if self.tabs.is_empty() {
                 self.active_tab = 0;
+            } else if idx < self.active_tab {
+                self.active_tab -= 1;
             } else if self.active_tab >= self.tabs.len() {
                 self.active_tab = self.tabs.len() - 1;
             }
@@ -408,8 +410,13 @@ pub fn render_terminal(ui: &mut egui::Ui, state: &mut TerminalState, font_size: 
         );
     }
 
-    // Allocate area for interaction
-    let _response = ui.allocate_rect(rect, egui::Sense::click());
+    // Keep the content's click target below the header, so it cannot consume
+    // clicks intended for the tab labels, tab close buttons or panel close button.
+    let content_rect = egui::Rect::from_min_max(
+        egui::pos2(rect.left(), (rect.top() + header_height).min(rect.bottom())),
+        rect.right_bottom(),
+    );
+    let _response = ui.allocate_rect(content_rect, egui::Sense::click());
 }
 
 /// Handle keyboard input for the terminal panel.
@@ -476,6 +483,112 @@ fn vt100_color_to_egui(color: u8) -> egui::Color32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn terminal_frame(
+        ctx: &egui::Context,
+        state: &mut TerminalState,
+        events: Vec<egui::Event>,
+    ) -> egui::Rect {
+        let mut rect = egui::Rect::NOTHING;
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(600.0, 300.0),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    rect = ui.available_rect_before_wrap();
+                    render_terminal(ui, state, 14.0);
+                });
+            },
+        );
+        rect
+    }
+
+    fn click_terminal(ctx: &egui::Context, state: &mut TerminalState, pos: egui::Pos2) {
+        for pressed in [true, false] {
+            terminal_frame(
+                ctx,
+                state,
+                vec![egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+            );
+        }
+    }
+
+    fn terminal_with_tabs(count: usize) -> TerminalState {
+        TerminalState {
+            visible: true,
+            tabs: (1..=count)
+                .map(|i| TerminalTab::new(format!("Terminal {i}")))
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn tab_close_button_receives_pointer_click() {
+        let ctx = egui::Context::default();
+        let mut state = terminal_with_tabs(2);
+        let rect = terminal_frame(&ctx, &mut state, vec![]);
+        // First tab: left + 4, width 10 * 7 + 24, close button inset 20.
+        click_terminal(&ctx, &mut state, rect.min + egui::vec2(87.0, 13.0));
+        assert_eq!(state.tabs.len(), 1);
+        assert_eq!(state.tabs[0].name, "Terminal 2");
+        assert!(state.visible);
+    }
+
+    #[test]
+    fn closing_last_tab_hides_panel_without_spawning_replacement() {
+        let ctx = egui::Context::default();
+        let mut state = terminal_with_tabs(1);
+        let rect = terminal_frame(&ctx, &mut state, vec![]);
+        click_terminal(&ctx, &mut state, rect.min + egui::vec2(87.0, 13.0));
+        assert!(state.tabs.is_empty());
+        assert!(!state.visible);
+    }
+
+    #[test]
+    fn panel_close_button_receives_pointer_click() {
+        let ctx = egui::Context::default();
+        let mut state = terminal_with_tabs(1);
+        let rect = terminal_frame(&ctx, &mut state, vec![]);
+        click_terminal(
+            &ctx,
+            &mut state,
+            egui::pos2(rect.right() - 14.0, rect.top() + 12.0),
+        );
+        assert!(!state.visible);
+        assert_eq!(state.tabs.len(), 1);
+    }
+
+    #[test]
+    fn terminal_tab_label_receives_pointer_click() {
+        let ctx = egui::Context::default();
+        let mut state = terminal_with_tabs(2);
+        let rect = terminal_frame(&ctx, &mut state, vec![]);
+        click_terminal(&ctx, &mut state, rect.min + egui::vec2(110.0, 12.0));
+        assert_eq!(state.active_tab, 1);
+    }
+
+    #[test]
+    fn closing_an_earlier_tab_keeps_the_active_session() {
+        let ctx = egui::Context::default();
+        let mut state = terminal_with_tabs(3);
+        state.active_tab = 1;
+        let rect = terminal_frame(&ctx, &mut state, vec![]);
+        click_terminal(&ctx, &mut state, rect.min + egui::vec2(87.0, 13.0));
+        assert_eq!(state.tabs.len(), 2);
+        assert_eq!(state.tabs[state.active_tab].name, "Terminal 2");
+    }
 
     #[test]
     fn test_terminal_state_default() {

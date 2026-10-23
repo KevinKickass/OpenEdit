@@ -147,6 +147,22 @@ default_encoding = "utf-8"
 restore_session = true
 ```
 
+## Linux: file drag and drop
+
+The current egui/winit backend does not deliver file-drop events on native
+Wayland ([upstream issue](https://github.com/emilk/egui/issues/1563)).
+Use **File > Open** instead, or launch OpenEdit through XWayland when it is
+available (`DISPLAY` must be set):
+
+```bash
+env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET openedit
+```
+
+For a development build, use
+`env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET cargo run`.
+This workaround selects the X11 backend for that invocation; it does not add
+native Wayland drag-and-drop support.
+
 ## Supported Languages
 
 Syntax highlighting for 50+ languages including:
