@@ -46,11 +46,7 @@ pub fn render_tab_bar(
 
         for (i, (name, modified, file_path)) in tabs.iter().enumerate() {
             let is_active = i == active_tab;
-            let bg = if is_active {
-                theme.tab_active_bg
-            } else {
-                theme.tab_inactive_bg
-            };
+            let bg = if is_active { theme.gutter_bg } else { egui::Color32::from_rgb(20, 20, 20) };
 
             let label = if *modified {
                 format!("{} \u{25CF}", name) // ● dot for modified
@@ -68,13 +64,30 @@ pub fn render_tab_bar(
                     let tab_resp =
                         ui.add(egui::Label::new(text).sense(egui::Sense::click_and_drag()));
 
-                    // Close button — use a Button so it gets its own interaction rect
-                    let close_text =
-                        egui::RichText::new(" \u{00D7}") // ×
-                            .color(theme.tab_text.linear_multiply(0.6))
-                            .size(13.0);
-                    let close_btn = egui::Button::new(close_text).frame(false).small();
-                    if ui.add(close_btn).on_hover_text("Close").clicked() {
+                    ui.add_space(8.0);
+
+                    let close_resp = ui
+                        .add(
+                            egui::Button::new(
+                                egui::RichText::new("\u{00D7}")
+                                    .color(theme.tab_text.gamma_multiply(0.55))
+                                    .size(14.0),
+                            )
+                            .frame(false)
+                            .min_size(egui::vec2(18.0, 18.0)),
+                        )
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .on_hover_text("Close");
+
+                    if close_resp.hovered() {
+                        ui.painter().rect_filled(
+                            close_resp.rect.expand(2.0),
+                            3.0,
+                            theme.tab_text.gamma_multiply(0.15),
+                        );
+                    }
+
+                    if close_resp.clicked() {
                         response.close = Some(i);
                     }
 
