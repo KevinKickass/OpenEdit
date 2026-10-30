@@ -3218,11 +3218,10 @@ impl eframe::App for OpenEditApp {
                 }
 
                 let width = ui.available_width();
-                let (rect, _) = ui.allocate_exact_size(
-                    egui::vec2(width, 1.0),
-                    egui::Sense::hover(),
-                );
-                ui.painter().rect_filled(rect, 0.0, self.theme.gutter_fg.gamma_multiply(0.45));
+                let (rect, _) =
+                    ui.allocate_exact_size(egui::vec2(width, 1.0), egui::Sense::hover());
+                ui.painter()
+                    .rect_filled(rect, 0.0, self.theme.gutter_fg.gamma_multiply(0.45));
 
                 // Determine sidebar width for layout splitting
                 let sidebar_visible = self.sidebar_state.visible;

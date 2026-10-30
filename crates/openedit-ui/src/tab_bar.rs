@@ -46,7 +46,11 @@ pub fn render_tab_bar(
 
         for (i, (name, modified, file_path)) in tabs.iter().enumerate() {
             let is_active = i == active_tab;
-            let bg = if is_active { theme.gutter_bg } else { egui::Color32::from_rgb(20, 20, 20) };
+            let bg = if is_active {
+                theme.gutter_bg
+            } else {
+                egui::Color32::from_rgb(20, 20, 20)
+            };
 
             let label = if *modified {
                 format!("{} \u{25CF}", name) // ● dot for modified
@@ -176,26 +180,23 @@ pub fn render_tab_bar(
         }
 
         egui::Frame::none()
-        .inner_margin(egui::Margin {
-            left: 8.0,
-            right: 0.0,
-            top: 2.0,
-            bottom: 0.0,
-        })
-        .show(ui, |ui| {
-            ui.spacing_mut().button_padding = egui::vec2(10.0, 6.0);
+            .inner_margin(egui::Margin {
+                left: 8.0,
+                right: 0.0,
+                top: 2.0,
+                bottom: 0.0,
+            })
+            .show(ui, |ui| {
+                ui.spacing_mut().button_padding = egui::vec2(10.0, 6.0);
 
-            let plus = egui::RichText::new("+")
-                .color(theme.tab_text)
-                .size(13.0);
+                let plus = egui::RichText::new("+").color(theme.tab_text).size(13.0);
 
-            let btn = egui::Button::new(plus).fill(theme.tab_inactive_bg);
+                let btn = egui::Button::new(plus).fill(theme.tab_inactive_bg);
 
-            if ui.add(btn).on_hover_text("New Tab").clicked() {
-                response.activate = Some(usize::MAX);
-            }
-        });
-
+                if ui.add(btn).on_hover_text("New Tab").clicked() {
+                    response.activate = Some(usize::MAX);
+                }
+            });
     });
 
     // Handle drag end and reorder — also clean up stale drag state
