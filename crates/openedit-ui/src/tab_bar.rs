@@ -162,11 +162,27 @@ pub fn render_tab_bar(
             }
         }
 
-        // "+" button for new tab
-        let plus = egui::RichText::new(" + ").color(theme.tab_text).size(13.0);
-        if ui.button(plus).on_hover_text("New Tab").clicked() {
-            response.activate = Some(usize::MAX); // sentinel for "new tab"
-        }
+        egui::Frame::none()
+        .inner_margin(egui::Margin {
+            left: 8.0,
+            right: 0.0,
+            top: 2.0,
+            bottom: 0.0,
+        })
+        .show(ui, |ui| {
+            ui.spacing_mut().button_padding = egui::vec2(10.0, 6.0);
+
+            let plus = egui::RichText::new("+")
+                .color(theme.tab_text)
+                .size(13.0);
+
+            let btn = egui::Button::new(plus).fill(theme.tab_inactive_bg);
+
+            if ui.add(btn).on_hover_text("New Tab").clicked() {
+                response.activate = Some(usize::MAX);
+            }
+        });
+
     });
 
     // Handle drag end and reorder — also clean up stale drag state
