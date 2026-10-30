@@ -105,7 +105,7 @@ pub fn render_editor(
     let rect = ui.available_rect_before_wrap();
 
     // Background
-    ui.painter().rect_filled(rect, 0.0, theme.background);
+    ui.painter().rect_filled(rect, 0.0, theme.tab_inactive_bg);
 
     let total_lines = doc.buffer.len_lines();
     let current_line = doc.cursors.primary().position.line;

@@ -47,9 +47,9 @@ pub fn render_tab_bar(
         for (i, (name, modified, file_path)) in tabs.iter().enumerate() {
             let is_active = i == active_tab;
             let bg = if is_active {
-                theme.tab_active_bg
+                theme.gutter_bg
             } else {
-                theme.tab_inactive_bg
+                egui::Color32::from_rgb(20, 20, 20)
             };
 
             let label = if *modified {
@@ -68,13 +68,30 @@ pub fn render_tab_bar(
                     let tab_resp =
                         ui.add(egui::Label::new(text).sense(egui::Sense::click_and_drag()));
 
-                    // Close button — use a Button so it gets its own interaction rect
-                    let close_text =
-                        egui::RichText::new(" \u{00D7}") // ×
-                            .color(theme.tab_text.linear_multiply(0.6))
-                            .size(13.0);
-                    let close_btn = egui::Button::new(close_text).frame(false).small();
-                    if ui.add(close_btn).on_hover_text("Close").clicked() {
+                    ui.add_space(8.0);
+
+                    let close_resp = ui
+                        .add(
+                            egui::Button::new(
+                                egui::RichText::new("\u{00D7}")
+                                    .color(theme.tab_text.gamma_multiply(0.55))
+                                    .size(14.0),
+                            )
+                            .frame(false)
+                            .min_size(egui::vec2(18.0, 18.0)),
+                        )
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .on_hover_text("Close");
+
+                    if close_resp.hovered() {
+                        ui.painter().rect_filled(
+                            close_resp.rect.expand(2.0),
+                            3.0,
+                            theme.tab_text.gamma_multiply(0.15),
+                        );
+                    }
+
+                    if close_resp.clicked() {
                         response.close = Some(i);
                     }
 
@@ -162,11 +179,24 @@ pub fn render_tab_bar(
             }
         }
 
-        // "+" button for new tab
-        let plus = egui::RichText::new(" + ").color(theme.tab_text).size(13.0);
-        if ui.button(plus).on_hover_text("New Tab").clicked() {
-            response.activate = Some(usize::MAX); // sentinel for "new tab"
-        }
+        egui::Frame::none()
+            .inner_margin(egui::Margin {
+                left: 8.0,
+                right: 0.0,
+                top: 2.0,
+                bottom: 0.0,
+            })
+            .show(ui, |ui| {
+                ui.spacing_mut().button_padding = egui::vec2(10.0, 6.0);
+
+                let plus = egui::RichText::new("+").color(theme.tab_text).size(13.0);
+
+                let btn = egui::Button::new(plus).fill(theme.tab_inactive_bg);
+
+                if ui.add(btn).on_hover_text("New Tab").clicked() {
+                    response.activate = Some(usize::MAX);
+                }
+            });
     });
 
     // Handle drag end and reorder — also clean up stale drag state
